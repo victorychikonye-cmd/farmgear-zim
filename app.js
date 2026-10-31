@@ -303,6 +303,8 @@
       if (a.getAttribute('data-nav') === view) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
+    const fabEl = $('#fab');
+    if (fabEl) fabEl.hidden = view !== 'browse';
     if (view === 'saved') renderSaved();
     if (view === 'profile') renderProfile();
     if (view === 'browse' && live && loadErr) loadListings();
@@ -432,9 +434,9 @@
       '<h2>List equipment</h2>' +
       '<p class="meta">Add photos and a price to hire, to buy, or both.</p>' +
       '<form class="form" id="addForm" autocomplete="off" style="margin-top:14px">' +
-        '<div class="field"><span>Photos</span>' +
+        '<div class="field"><span>Photos of the equipment</span>' +
           '<div class="strip" id="aPrev"></div>' +
-          '<label class="btn ghost inline" for="aPhotos" style="justify-self:start">Add photos' +
+          '<label class="btn alt inline" for="aPhotos" style="justify-self:start">' + icon('camera') + 'Take or choose photos' +
             '<input id="aPhotos" type="file" accept="image/*" multiple class="sr-file"></label>' +
           '<span class="meta" id="aCount"></span></div>' +
         '<label class="field"><span>What is it?</span><input id="aTitle" type="text" required maxlength="80" placeholder="e.g. Ferguson tractor"></label>' +
@@ -445,16 +447,20 @@
         '<label class="field"><span>Selling price (USD)</span><input id="aBuy" type="text" inputmode="numeric" placeholder="Leave empty if not for sale"></label>' +
         '<label class="field"><span>Details (optional)</span><textarea id="aDesc" maxlength="600" placeholder="Power, size, what is included, when it is free"></textarea></label>' +
         '<label class="field"><span>WhatsApp number</span><input id="aPhone" type="tel" inputmode="tel" required placeholder="+263 77 000 0000" value="' + esc(store.profile.phone) + '"></label>' +
-        '<p class="meta" id="aErr" role="alert"></p>' +
+        '<p class="meta" id="aErr" role="alert" style="color:var(--clay);font-weight:700;font-size:15px"></p>' +
         '<button type="submit" class="btn alt" id="aSubmit">Post listing</button>' +
       '</form>'
     );
     renderStrip();
     $('#aPhotos').addEventListener('change', function () {
       const files = Array.from(this.files || []);
+      const isImage = (f) => f.type.indexOf('image/') === 0 || !f.type || /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(f.name || '');
+      $('#aErr').textContent = '';
+      if (!files.length) { $('#aErr').textContent = 'No photo was picked. Tap Take or choose photos and select a picture.'; }
       for (const f of files) {
         if (draft.length >= MAX_PHOTOS) { $('#aErr').textContent = 'You can add up to ' + MAX_PHOTOS + ' photos.'; break; }
-        if (f.type.indexOf('image/') === 0) draft.push({ file: f, url: URL.createObjectURL(f) });
+        if (isImage(f)) draft.push({ file: f, url: URL.createObjectURL(f) });
+        else $('#aErr').textContent = 'That file is not a photo. Pick a JPG or PNG picture.';
       }
       this.value = '';
       renderStrip();
@@ -465,13 +471,15 @@
   async function submitListing(e) {
     e.preventDefault();
     const err = $('#aErr');
+    const fail = (m) => { err.textContent = m; toast(m); try { err.scrollIntoView({ block: 'center' }); } catch (x) { /* ignore */ } };
     const title = $('#aTitle').value.trim();
     const hire = parseInt($('#aHire').value.replace(/[^\d]/g, ''), 10) || null;
     const buy = parseInt($('#aBuy').value.replace(/[^\d]/g, ''), 10) || null;
     const phone = $('#aPhone').value.trim();
-    if (title.length < 2) { err.textContent = 'Enter what the equipment is.'; return; }
-    if (!hire && !buy) { err.textContent = 'Add a hire price, a selling price, or both.'; return; }
-    if (waNumber(phone).length < 9) { err.textContent = 'Enter a WhatsApp number buyers can reach you on.'; return; }
+    if (!draft.length) { fail('Add at least one photo of the equipment.'); return; }
+    if (title.length < 2) { fail('Enter what the equipment is.'); return; }
+    if (!hire && !buy) { fail('Add a hire price, a selling price, or both.'); return; }
+    if (waNumber(phone).length < 9) { fail('Enter a WhatsApp number buyers can reach you on.'); return; }
     const btn = $('#aSubmit');
     btn.disabled = true; btn.textContent = 'Posting…'; err.textContent = '';
     try {
@@ -502,7 +510,7 @@
       await loadListings();
       toast('Posted. Your equipment is live.');
     } catch (ex) {
-      err.textContent = ex.message || 'Could not post. Check your connection and try again.';
+      fail(ex.message || 'Could not post. Check your connection and try again.');
       btn.disabled = false; btn.textContent = 'Post listing';
     }
   }
@@ -548,6 +556,7 @@
   $('#q').addEventListener('input', renderBrowse);
   $('#town').addEventListener('change', renderBrowse);
   $('#addBtn').addEventListener('click', openAdd);
+  if ($('#fab')) $('#fab').addEventListener('click', openAdd);
   $('#addBtn2').addEventListener('click', openAdd);
   $('#sheetX').addEventListener('click', closeSheet);
   $('#overlay').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
