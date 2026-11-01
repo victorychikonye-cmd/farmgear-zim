@@ -1,0 +1,18 @@
+{
+  "background_color": "#0f3320",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "FarmGear",
+  "orientation": "any",
+  "scope": "/farmgear-zim/",
+  "short_name": "FarmGear",
+  "start_url": "/farmgear-zim/",
+  "theme_color": "#0F3320",
+  "id": "/farmgear-zim/",
+  "description": "It is there to help farmers hire and buy farm equipments all over Zimbabwe",
+  "lang": "en",
+  "categories": [
+    "business",
+    "networking"
+  ]
+}
