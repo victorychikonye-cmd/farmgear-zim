@@ -8,6 +8,21 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const money = (n) => '$' + Number(n).toLocaleString('en-US');
 
+  /* ---------- Splash (set up first so it always goes away) ---------- */
+  const splash = $('#splash');
+  if (splash) {
+    const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let done = false;
+    const endSplash = () => {
+      if (done) return;
+      done = true;
+      splash.classList.add('out');
+      setTimeout(() => splash.remove(), 600);
+    };
+    splash.addEventListener('click', endSplash);
+    setTimeout(endSplash, reduced ? 1000 : 2900);
+  }
+
   /* ---------- Supabase ---------- */
   const cfg = window.FARMGEAR_CONFIG || {};
   const BUCKET = cfg.BUCKET || 'media';
@@ -300,7 +315,7 @@
     const raw = (location.hash || '#browse').slice(1);
     const h = raw.indexOf('chat-') === 0 ? 'chat' : raw;
     view = VIEWS.indexOf(h) > -1 ? h : 'browse';
-    VIEWS.forEach((v) => { $('#view-' + v).hidden = v !== view; });
+    VIEWS.forEach((v) => { const el = $('#view-' + v); if (el) el.hidden = v !== view; });
     const navKey = view === 'chat' ? 'messages' : view;
     document.querySelectorAll('[data-nav]').forEach((a) => {
       if (a.getAttribute('data-nav') === navKey) a.setAttribute('aria-current', 'page');
@@ -536,12 +551,14 @@
   function paintBadge() {
     const n = convs.filter(unreadOf).length;
     const b = $('#msgBadge');
+    if (!b) return;
     b.textContent = n > 9 ? '9+' : String(n);
     b.hidden = n === 0;
   }
 
   function renderInbox() {
     const empty = $('#inboxEmpty');
+    if (!empty || !$('#inboxList')) return;
     const rows = user ? convs.filter((c) => c.last_body || c.buyer === user.id) : [];
     $('#inboxList').innerHTML = rows.map((c) => {
       const un = unreadOf(c);
@@ -737,12 +754,14 @@
     if (view === 'chat') showChat(chatId());
   }
 
-  $('#chatForm').addEventListener('submit', sendMsg);
-  $('#chatText').addEventListener('input', function () {
-    this.style.height = 'auto';
-    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-  });
-  $('#chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendMsg(e); });
+  if ($('#chatForm') && $('#chatText')) {
+    $('#chatForm').addEventListener('submit', sendMsg);
+    $('#chatText').addEventListener('input', function () {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+    $('#chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendMsg(e); });
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden || !live || !user) return;
     loadConvs();
@@ -836,16 +855,4 @@
   renderAll();
   route();
 
-  /* ---------- Splash ---------- */
-  const splash = $('#splash');
-  const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let done = false;
-  function endSplash() {
-    if (done) return;
-    done = true;
-    splash.classList.add('out');
-    setTimeout(() => splash.remove(), 600);
-  }
-  splash.addEventListener('click', endSplash);
-  setTimeout(endSplash, reduced ? 1000 : 2900);
 })();
