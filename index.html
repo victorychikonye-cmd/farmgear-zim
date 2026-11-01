@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#0F3320">
   <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <title>FarmGear Zim</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,7 +27,10 @@
   <symbol id="i-search" viewBox="0 0 48 48"><circle cx="21" cy="21" r="11"/><path d="M29 29l13 13"/></symbol>
   <symbol id="i-person" viewBox="0 0 48 48"><circle cx="24" cy="17" r="8"/><path d="M8 42c2-10 9-14 16-14s14 4 16 14"/></symbol>
   <symbol id="i-close" viewBox="0 0 48 48"><path d="M12 12l24 24M36 12L12 36"/></symbol>
-  <symbol id="i-whatsapp" viewBox="0 0 48 48"><path d="M8 40l3-9a16 16 0 1 1 6 6z"/><path d="M18 17c0 7 6 13 13 13l2-3-4-2-2 2c-3-1-5-3-6-6l2-2-2-4z"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 48 48"><rect x="4" y="14" width="40" height="27" rx="4"/><circle cx="24" cy="28" r="7"/><path d="M16 14l3-6h10l3 6"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 48 48"><path d="M6 10h36v24H20l-9 8v-8H6z"/><path d="M14 18h20M14 26h12"/></symbol>
+  <symbol id="i-send" viewBox="0 0 48 48"><path d="M6 22L42 6 30 42 22 28z"/><path d="M22 28L42 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 48 48"><path d="M30 8L14 24l16 16"/></symbol>
 </svg>
 
 <!-- Splash screen -->
@@ -135,8 +138,6 @@
         </select></label>
       <label class="field"><span>Town</span>
         <select id="pTown"></select></label>
-      <label class="field"><span>WhatsApp number</span>
-        <input id="pPhone" type="tel" inputmode="tel" placeholder="+263 77 000 0000"></label>
     </form>
 
     <div class="stats">
@@ -149,12 +150,38 @@
     <p class="meta" id="myEmpty">Equipment you post will show here.</p>
   </section>
 
+  <!-- Messages -->
+  <section id="view-messages" aria-labelledby="msgTitle" hidden>
+    <h1 id="msgTitle">Messages</h1>
+    <p class="lead">Talk to equipment owners and buyers here. Agree on price, dates and pickup.</p>
+    <p class="meta" id="inboxMsg" aria-live="polite"></p>
+    <ul class="cards" id="inboxList"></ul>
+    <div class="empty" id="inboxEmpty" hidden></div>
+  </section>
+
+  <!-- Chat -->
+  <section id="view-chat" aria-label="Chat" hidden>
+    <div class="chat-hd">
+      <a class="chat-back" href="#messages" aria-label="Back to messages"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></a>
+      <div><b id="chatTitle"></b><span class="meta" id="chatSub"></span></div>
+    </div>
+    <div class="chat-list" id="chatList" aria-live="polite"></div>
+    <form class="composer" id="chatForm" autocomplete="off">
+      <label class="sr" for="chatText">Message</label>
+      <textarea id="chatText" rows="1" maxlength="1000" placeholder="Type a message"></textarea>
+      <button type="submit" class="send" aria-label="Send message"><svg class="ic" aria-hidden="true"><use href="#i-send"/></svg></button>
+    </form>
+  </section>
+
 </main>
+
+<button type="button" class="fab" id="fab"><svg class="ic" aria-hidden="true"><use href="#i-camera"/></svg>Post equipment photo</button>
 
 <nav class="nav" aria-label="Main">
   <div class="nav-in">
     <a href="#browse" data-nav="browse"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>Browse</a>
     <a href="#saved" data-nav="saved"><svg class="ic" aria-hidden="true"><use href="#i-heart"/></svg>Saved</a>
+    <a href="#messages" data-nav="messages"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg>Messages<i class="badge" id="msgBadge" hidden></i></a>
     <a href="#profile" data-nav="profile"><svg class="ic" aria-hidden="true"><use href="#i-person"/></svg>Profile</a>
   </div>
 </nav>
@@ -172,12 +199,12 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
-  <script>
-  if ('serviceWorker' in navigator) {
+<script>
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js');
+      navigator.serviceWorker.register('sw.js').catch(function () {});
     });
   }
-  </script>
+</script>
 </body>
 </html>

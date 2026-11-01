@@ -76,6 +76,7 @@
   let mode = 'hire', cat = 'all', view = 'browse';
   let user = null, remote = [], loading = false, loadErr = '';
   let draft = [];
+  let convs = [], activeConv = null, msgs = [], chan = null, pollTimer = null;
 
   const all = () => (live ? remote : SAMPLES);
   const byId = (id) => all().find((l) => l.id === id);
@@ -274,7 +275,6 @@
     $('#pName').value = pr.name;
     $('#pRole').value = pr.role;
     $('#pTown').value = pr.town;
-    $('#pPhone').value = pr.phone;
     $('#photoDel').hidden = !pr.photo;
     paintAvatars();
 
@@ -294,19 +294,27 @@
   const renderAll = () => { renderBrowse(); renderSaved(); renderProfile(); };
 
   /* ---------- Router ---------- */
-  const VIEWS = ['browse', 'saved', 'profile'];
+  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile'];
+  const chatId = () => (location.hash || '').slice(1).replace(/^chat-/, '');
   function route() {
-    const h = (location.hash || '#browse').slice(1);
+    const raw = (location.hash || '#browse').slice(1);
+    const h = raw.indexOf('chat-') === 0 ? 'chat' : raw;
     view = VIEWS.indexOf(h) > -1 ? h : 'browse';
     VIEWS.forEach((v) => { $('#view-' + v).hidden = v !== view; });
+    const navKey = view === 'chat' ? 'messages' : view;
     document.querySelectorAll('[data-nav]').forEach((a) => {
-      if (a.getAttribute('data-nav') === view) a.setAttribute('aria-current', 'page');
+      if (a.getAttribute('data-nav') === navKey) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
+    $('.nav').hidden = view === 'chat';
+    document.body.style.overflow = view === 'chat' ? 'hidden' : '';
+    if (view !== 'chat') activeConv = null;
     const fabEl = $('#fab');
     if (fabEl) fabEl.hidden = view !== 'browse';
     if (view === 'saved') renderSaved();
     if (view === 'profile') renderProfile();
+    if (view === 'messages') loadConvs();
+    if (view === 'chat') showChat(chatId());
     if (view === 'browse' && live && loadErr) loadListings();
     window.scrollTo(0, 0);
   }
@@ -336,12 +344,6 @@
   }
 
   /* ---------- Listing detail ---------- */
-  function waNumber(p) {
-    let d = (p || '').replace(/\D/g, '');
-    if (d.indexOf('00') === 0) d = d.slice(2);
-    else if (d.indexOf('0') === 0) d = '263' + d.slice(1);
-    return d;
-  }
 
   function openDetail(id) {
     const l = byId(id);
@@ -355,10 +357,6 @@
       if (l.created) specs.push(['Posted', new Date(l.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })]);
     }
     const specHtml = specs.map((s) => '<dt>' + esc(s[0]) + '</dt><dd>' + esc(s[1]) + '</dd>').join('');
-    const want = mode === 'buy' && l.buy ? 'buy' : (l.hire ? 'hire' : 'buy');
-    const msg = 'Hi, I saw "' + l.title + '" in ' + l.town + ' on FarmGear Zim. Is it still available to ' + want + '?';
-    const num = waNumber(l.phone);
-    const wa = 'https://wa.me/' + num + '?text=' + encodeURIComponent(msg);
     let foot = '';
     if (isMine(l)) foot = '<button type="button" class="btn ghost" data-remove="' + esc(l.id) + '">Remove my listing</button>';
     else if (!live) foot = '<p class="sheet-note">Sample listing. Price and seller are examples for this preview.</p>';
@@ -372,7 +370,7 @@
       '<div class="price-row">' + prices + '</div>' +
       (l.description ? '<p class="desc">' + esc(l.description) + '</p>' : '') +
       '<dl>' + specHtml + '</dl>' +
-      '<a class="btn" href="' + wa + '" target="_blank" rel="noopener">' + icon('whatsapp') + 'Message on WhatsApp</a>' +
+      chatBtnHtml(l) +
       foot
     );
   }
@@ -446,8 +444,7 @@
         '<label class="field"><span>Hire price per day (USD)</span><input id="aHire" type="text" inputmode="numeric" placeholder="Leave empty if not for hire"></label>' +
         '<label class="field"><span>Selling price (USD)</span><input id="aBuy" type="text" inputmode="numeric" placeholder="Leave empty if not for sale"></label>' +
         '<label class="field"><span>Details (optional)</span><textarea id="aDesc" maxlength="600" placeholder="Power, size, what is included, when it is free"></textarea></label>' +
-        '<label class="field"><span>WhatsApp number</span><input id="aPhone" type="tel" inputmode="tel" required placeholder="+263 77 000 0000" value="' + esc(store.profile.phone) + '"></label>' +
-        '<p class="meta" id="aErr" role="alert" style="color:var(--clay);font-weight:700;font-size:15px"></p>' +
+                '<p class="meta" id="aErr" role="alert" style="color:var(--clay);font-weight:700;font-size:15px"></p>' +
         '<button type="submit" class="btn alt" id="aSubmit">Post listing</button>' +
       '</form>'
     );
@@ -475,11 +472,9 @@
     const title = $('#aTitle').value.trim();
     const hire = parseInt($('#aHire').value.replace(/[^\d]/g, ''), 10) || null;
     const buy = parseInt($('#aBuy').value.replace(/[^\d]/g, ''), 10) || null;
-    const phone = $('#aPhone').value.trim();
     if (!draft.length) { fail('Add at least one photo of the equipment.'); return; }
     if (title.length < 2) { fail('Enter what the equipment is.'); return; }
     if (!hire && !buy) { fail('Add a hire price, a selling price, or both.'); return; }
-    if (waNumber(phone).length < 9) { fail('Enter a WhatsApp number buyers can reach you on.'); return; }
     const btn = $('#aSubmit');
     btn.disabled = true; btn.textContent = 'Posting…'; err.textContent = '';
     try {
@@ -495,14 +490,13 @@
       btn.textContent = 'Posting…';
       const ins = await sb.from('listings').insert({
         owner: user.id, title: title, cat: $('#aCat').value, town: $('#aTown').value, cond: $('#aCond').value,
-        hire: hire, buy: buy, description: $('#aDesc').value.trim() || null, contact_phone: phone,
+        hire: hire, buy: buy, description: $('#aDesc').value.trim() || null, contact_phone: null,
         seller_name: store.profile.name || null, photo_paths: paths
       });
       if (ins.error) {
         if (paths.length) sb.storage.from(BUCKET).remove(paths);
         throw ins.error;
       }
-      if (!store.profile.phone) { store.profile.phone = phone; persist(); syncProfile(); }
       mode = hire ? 'hire' : 'buy';
       cat = 'all'; $('#q').value = ''; $('#town').value = '';
       closeSheet();
@@ -526,9 +520,238 @@
     persist(); closeSheet(); renderAll(); toast('Listing removed.');
   }
 
+  /* ---------- Messages ---------- */
+  const unreadOf = (c) => !!(user && c.last_sender && c.last_sender !== user.id &&
+    new Date(c.last_at) > new Date(user.id === c.buyer ? c.buyer_read_at : c.seller_read_at));
+  const otherName = (c) => (user && user.id === c.buyer ? c.seller_name : c.buyer_name) || 'FarmGear user';
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    if (d.toDateString() === new Date().toDateString()) return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+  function chatBtnHtml(l) {
+    if (!live || isMine(l)) return '';
+    return '<button type="button" class="btn alt" data-chat="' + esc(l.id) + '">' + icon('chat') + 'Message in app</button>';
+  }
+  function paintBadge() {
+    const n = convs.filter(unreadOf).length;
+    const b = $('#msgBadge');
+    b.textContent = n > 9 ? '9+' : String(n);
+    b.hidden = n === 0;
+  }
+
+  function renderInbox() {
+    const empty = $('#inboxEmpty');
+    const rows = user ? convs.filter((c) => c.last_body || c.buyer === user.id) : [];
+    $('#inboxList').innerHTML = rows.map((c) => {
+      const un = unreadOf(c);
+      return '<li class="card conv"><button type="button" class="conv-main" data-conv="' + esc(c.id) + '">' +
+        '<span class="avatar sm">' + (esc(initials(otherName(c))) || icon('person')) + '</span>' +
+        '<span class="conv-body"><b>' + esc(otherName(c)) + '</b>' +
+        '<span class="meta">' + esc(c.listing_title || 'Equipment') + '</span>' +
+        '<span class="conv-last' + (un ? ' unread' : '') + '">' + esc(c.last_body || 'No messages yet. Say hello.') + '</span></span>' +
+        '<span class="conv-time">' + fmtTime(c.last_at) + (un ? '<i class="dot"></i>' : '') + '</span>' +
+        '</button></li>';
+    }).join('');
+    if (!live) {
+      empty.hidden = false;
+      empty.innerHTML = '<p><b>Messaging is switched off.</b></p><p class="meta">Add your Supabase keys in config.js to message owners inside the app.</p>';
+    } else if (!user) {
+      empty.hidden = false;
+      empty.innerHTML = '<p><b>Sign in to see your messages.</b></p><button type="button" class="btn" data-auth>Sign in or create account</button>';
+    } else if (!rows.length) {
+      empty.hidden = false;
+      empty.innerHTML = '<p><b>No messages yet.</b></p><p class="meta">Open any equipment and tap Message in app to talk to the owner.</p><a class="btn" href="#browse">Browse equipment</a>';
+    } else {
+      empty.hidden = true;
+    }
+  }
+
+  async function loadConvs() {
+    if (!live || !user) { convs = []; paintBadge(); renderInbox(); return; }
+    const res = await sb.from('conversations').select('*').order('last_at', { ascending: false }).limit(100);
+    if (res.error) { $('#inboxMsg').textContent = 'Could not load messages: ' + res.error.message; return; }
+    $('#inboxMsg').textContent = '';
+    convs = res.data;
+    paintBadge(); renderInbox();
+  }
+  let convTimer;
+  const loadConvsSoon = () => { clearTimeout(convTimer); convTimer = setTimeout(loadConvs, 400); };
+
+  async function startChat(listingId) {
+    const l = byId(listingId);
+    if (!l) return;
+    if (!user) { openAuth('Sign in to message the owner.'); return; }
+    if (l.owner === user.id) { toast('This is your own listing.'); return; }
+    let found = convs.find((c) => c.listing_id === l.id && c.buyer === user.id);
+    if (!found) {
+      const res = await sb.from('conversations').insert({ listing_id: l.id, seller: l.owner }).select().single();
+      if (res.error) {
+        const ex = await sb.from('conversations').select('*').eq('listing_id', l.id).eq('buyer', user.id).maybeSingle();
+        if (!ex.data) { toast('Could not start the chat: ' + res.error.message); return; }
+        found = ex.data;
+      } else {
+        found = res.data;
+      }
+      convs.unshift(found);
+    }
+    closeSheet();
+    location.hash = '#chat-' + found.id;
+  }
+
+  function renderMsgs(scroll) {
+    const list = $('#chatList');
+    if (!msgs.length) {
+      list.innerHTML = '<p class="meta chat-empty">No messages yet. Say hello and ask if the equipment is available.</p>';
+      return;
+    }
+    let html = '', lastDay = '';
+    msgs.forEach((m) => {
+      const day = new Date(m.created_at).toDateString();
+      if (day !== lastDay) {
+        lastDay = day;
+        html += '<div class="day">' + new Date(m.created_at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + '</div>';
+      }
+      const mine = m.sender === user.id;
+      html += '<div class="bub ' + (mine ? 'me' : 'them') + '"><span>' + esc(m.body) + '</span><time>' +
+        fmtTime(m.created_at) + (m.pending ? ' · sending' : '') + '</time></div>';
+    });
+    list.innerHTML = html;
+    if (scroll) list.scrollTop = list.scrollHeight;
+  }
+
+  async function markRead(id) {
+    const c = convs.find((x) => x.id === id);
+    if (!c || !user) return;
+    const now = new Date().toISOString();
+    if (user.id === c.buyer) c.buyer_read_at = now; else c.seller_read_at = now;
+    paintBadge(); renderInbox();
+    await sb.rpc('mark_read', { p_conv: id });
+  }
+
+  async function showChat(id) {
+    activeConv = id;
+    const list = $('#chatList');
+    $('#chatForm').hidden = !(live && user);
+    if (!live || !user) {
+      $('#chatTitle').textContent = 'Messages';
+      $('#chatSub').textContent = '';
+      list.innerHTML = '<div class="chat-empty"><p><b>Sign in to read this chat.</b></p>' +
+        (live ? '<button type="button" class="btn" data-auth>Sign in or create account</button>' : '') + '</div>';
+      return;
+    }
+    list.innerHTML = '<p class="meta chat-empty">Loading…</p>';
+    let c = convs.find((x) => x.id === id);
+    if (!c) {
+      const r = await sb.from('conversations').select('*').eq('id', id).maybeSingle();
+      if (activeConv !== id) return;
+      if (!r.data) {
+        $('#chatTitle').textContent = 'Chat not found';
+        $('#chatSub').textContent = '';
+        list.innerHTML = '<p class="meta chat-empty">This chat does not exist or is not yours.</p>';
+        return;
+      }
+      c = r.data; convs.unshift(c);
+    }
+    $('#chatTitle').textContent = otherName(c);
+    $('#chatSub').textContent = c.listing_title || 'Equipment';
+    const res = await sb.from('messages').select('*').eq('conversation_id', id).order('created_at', { ascending: true }).limit(300);
+    if (activeConv !== id) return;
+    if (res.error) { list.innerHTML = '<p class="meta chat-empty">Could not load messages: ' + esc(res.error.message) + '</p>'; return; }
+    msgs = res.data;
+    renderMsgs(true);
+    markRead(id);
+  }
+
+  async function pullMsgs() {
+    if (!live || !user || !activeConv || msgs.some((m) => m.pending)) return;
+    const id = activeConv;
+    const res = await sb.from('messages').select('*').eq('conversation_id', id).order('created_at', { ascending: true }).limit(300);
+    if (res.error || activeConv !== id) return;
+    const lastNew = res.data.length ? res.data[res.data.length - 1].id : null;
+    const lastOld = msgs.length ? msgs[msgs.length - 1].id : null;
+    if (lastNew === lastOld) return;
+    msgs = res.data;
+    renderMsgs(true);
+    markRead(id);
+  }
+
+  function onNewMsg(payload) {
+    const m = payload && payload.new;
+    if (!m || !user) return;
+    if (view === 'chat' && m.conversation_id === activeConv) {
+      if (msgs.some((x) => x.id === m.id)) return;
+      const t = m.sender === user.id ? msgs.findIndex((x) => x.pending && x.body === m.body) : -1;
+      if (t > -1) msgs[t] = m; else msgs.push(m);
+      renderMsgs(true);
+      if (m.sender !== user.id) markRead(activeConv);
+    } else if (m.sender !== user.id) {
+      toast('New message');
+    }
+    loadConvsSoon();
+  }
+
+  async function sendMsg(e) {
+    e.preventDefault();
+    const ta = $('#chatText');
+    const body = ta.value.trim();
+    const cid = activeConv;
+    if (!body || !cid || !user) return;
+    ta.value = ''; ta.style.height = 'auto';
+    const temp = { id: 'tmp' + Date.now(), conversation_id: cid, sender: user.id, body: body, created_at: new Date().toISOString(), pending: true };
+    msgs.push(temp); renderMsgs(true);
+    const res = await sb.from('messages').insert({ conversation_id: cid, body: body }).select().single();
+    const idx = msgs.indexOf(temp);
+    if (res.error) {
+      if (idx > -1) msgs.splice(idx, 1);
+      if (activeConv === cid) { renderMsgs(); if (!ta.value) ta.value = body; }
+      toast('Not sent: ' + res.error.message);
+      return;
+    }
+    if (idx > -1) {
+      if (msgs.some((x) => x.id === res.data.id)) msgs.splice(idx, 1); else msgs[idx] = res.data;
+    }
+    if (activeConv === cid) renderMsgs(true);
+    loadConvsSoon();
+  }
+
+  function setupChat() {
+    if (chan) { sb.removeChannel(chan); chan = null; }
+    clearInterval(pollTimer);
+    if (!live || !user) {
+      convs = []; msgs = [];
+      paintBadge(); renderInbox();
+      if (view === 'chat') showChat(chatId());
+      return;
+    }
+    chan = sb.channel('fg-chat-' + user.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, onNewMsg)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, loadConvsSoon)
+      .subscribe();
+    pollTimer = setInterval(() => {
+      if (document.hidden) return;
+      loadConvs();
+      if (view === 'chat') pullMsgs();
+    }, 20000);
+    loadConvs();
+    if (view === 'chat') showChat(chatId());
+  }
+
+  $('#chatForm').addEventListener('submit', sendMsg);
+  $('#chatText').addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+  $('#chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendMsg(e); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !live || !user) return;
+    loadConvs();
+    if (view === 'chat') pullMsgs();
+  });
+
   /* ---------- Events ---------- */
   document.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-open],[data-save],[data-cat],[data-mode],[data-remove],[data-rmphoto],[data-auth],[data-signout]');
+    const t = e.target.closest('[data-open],[data-save],[data-cat],[data-mode],[data-remove],[data-rmphoto],[data-auth],[data-signout],[data-chat],[data-conv]');
     if (!t) return;
     if (t.hasAttribute('data-save')) {
       const id = t.getAttribute('data-save');
@@ -546,6 +769,10 @@
     } else if (t.hasAttribute('data-rmphoto')) {
       const idx = parseInt(t.getAttribute('data-rmphoto'), 10);
       if (draft[idx]) { URL.revokeObjectURL(draft[idx].url); draft.splice(idx, 1); renderStrip(); }
+    } else if (t.hasAttribute('data-chat')) {
+      startChat(t.getAttribute('data-chat'));
+    } else if (t.hasAttribute('data-conv')) {
+      location.hash = '#chat-' + t.getAttribute('data-conv');
     } else if (t.hasAttribute('data-auth')) {
       openAuth();
     } else if (t.hasAttribute('data-signout')) {
@@ -575,7 +802,7 @@
       store.profile[key] = this.value; persist(); paintAvatars(); syncProfile();
     });
   }
-  bindField('#pName', 'name'); bindField('#pRole', 'role'); bindField('#pTown', 'town'); bindField('#pPhone', 'phone');
+  bindField('#pName', 'name'); bindField('#pRole', 'role'); bindField('#pTown', 'town');
 
   window.addEventListener('hashchange', route);
 
@@ -584,6 +811,7 @@
     renderProfile(); renderBrowse();
     if (user) setTimeout(loadProfile, 0);
     setTimeout(loadListings, 0);
+    setupChat();
   }
   if (live) {
     sb.auth.getSession().then((r) => {
