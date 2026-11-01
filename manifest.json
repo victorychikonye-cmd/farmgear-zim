@@ -1,21 +1,18 @@
 {
-  "name": "FarmGear Zim",
+  "name": "FarmGear",
   "short_name": "FarmGear",
-  "description": "Hire or buy farm equipment across Zimbabwe. Post equipment with photos and contact owners on WhatsApp.",
+  "description": "An application where farmers get to hire and buy farm equipment in Zimbabwe.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "lang": "en",
   "dir": "ltr",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#0F3320",
   "theme_color": "#0F3320",
   "categories": ["business", "shopping", "productivity"],
   "prefer_related_applications": false,
-  "related_applications": [],
-  "launch_handler": { "client_mode": "navigate-existing" },
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
@@ -25,14 +22,12 @@
     {
       "name": "Browse equipment",
       "short_name": "Browse",
-      "description": "See equipment to hire or buy",
       "url": "./#browse",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "My profile",
       "short_name": "Profile",
-      "description": "Open your profile and listings",
       "url": "./#profile",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
