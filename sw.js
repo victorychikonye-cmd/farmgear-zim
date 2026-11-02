@@ -1,6 +1,6 @@
 /* FarmGear Zim service worker: keeps the app shell available offline.
    Listings, sign-in and photos always go to the network (Supabase). */
-const CACHE = 'farmgear-shell-v4';
+const CACHE = 'farmgear-shell-v5';
 const SHELL = ['./', './index.html', './style.css', './app.js', './market.js', './prices.js', './community.js', './admin.js', './config.js', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', (event) => {
