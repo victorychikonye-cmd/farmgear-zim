@@ -34,6 +34,7 @@
   <symbol id="i-market" viewBox="0 0 48 48"><path d="M6 18h36l-4 22H10z"/><path d="M16 18l6-11M32 18l-6-11M17 26v8M24 26v8M31 26v8"/></symbol>
   <symbol id="i-chart" viewBox="0 0 48 48"><path d="M6 6v36h36"/><path d="M12 32l10-10 8 6 12-16"/></symbol>
   <symbol id="i-bell" viewBox="0 0 48 48"><path d="M12 34V22a12 12 0 0 1 24 0v12l4 4H8z"/><path d="M20 43h8"/></symbol>
+  <symbol id="i-people" viewBox="0 0 48 48"><circle cx="17" cy="16" r="6"/><circle cx="34" cy="18" r="5"/><path d="M4 41c1-9 6-13 13-13s12 4 13 13M30 29c6-1 12 2 14 11"/></symbol>
   <symbol id="i-shield" viewBox="0 0 48 48"><path d="M24 5l16 6v12c0 10-7 17-16 20C15 40 8 33 8 23V11z"/><path d="M17 24l5 5 9-10"/></symbol>
   <symbol id="i-phone" viewBox="0 0 48 48"><path d="M12 6h8l4 10-5 3a22 22 0 0 0 10 10l3-5 10 4v8c0 3-3 5-6 5C22 41 7 26 7 12c0-3 2-6 5-6z"/></symbol>
   <symbol id="i-filter" viewBox="0 0 48 48"><path d="M5 10h38L28 26v14l-8 4V26z"/></symbol>
@@ -72,6 +73,7 @@
       <span>FarmGear <em>Zim</em></span>
     </a>
     <div class="hdr-r">
+      <a class="hbtn" href="#community" data-hnav="community" aria-label="Farmer community"><svg class="ic" aria-hidden="true"><use href="#i-people"/></svg></a>
       <a class="hbtn" href="#saved" aria-label="Saved items"><svg class="ic" aria-hidden="true"><use href="#i-heart"/></svg></a>
       <a class="avatar" id="hdrAvatar" href="#profile" aria-label="Your profile"></a>
     </div>
@@ -177,6 +179,7 @@
   <!-- Marketplace, prices and admin are built by market.js, prices.js and admin.js -->
   <section id="view-market" aria-label="Produce market" hidden></section>
   <section id="view-prices" aria-label="Market prices" hidden></section>
+  <section id="view-community" aria-label="Farmer community" hidden></section>
   <section id="view-admin" aria-label="Admin dashboard" hidden></section>
 
   <!-- Messages -->
@@ -231,6 +234,7 @@
 <script src="app.js"></script>
 <script src="market.js"></script>
 <script src="prices.js"></script>
+<script src="community.js"></script>
 <script src="admin.js"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

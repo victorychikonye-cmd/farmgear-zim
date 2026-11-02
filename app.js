@@ -327,7 +327,7 @@
   const renderAll = () => { renderBrowse(); renderSaved(); renderProfile(); };
 
   /* ---------- Router ---------- */
-  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile', 'market', 'prices', 'admin'];
+  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile', 'market', 'prices', 'community', 'admin'];
   const chatId = () => (location.hash || '').slice(1).replace(/^chat-/, '');
   function route() {
     const raw = (location.hash || '#browse').slice(1);
@@ -338,6 +338,9 @@
     document.querySelectorAll('[data-nav]').forEach((a) => {
       if (a.getAttribute('data-nav') === navKey) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('[data-hnav]').forEach((a) => {
+      if (a.getAttribute('data-hnav') === view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
     $('.nav').hidden = view === 'chat';
     document.body.style.overflow = view === 'chat' ? 'hidden' : '';
