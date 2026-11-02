@@ -76,7 +76,7 @@
 
   /* ---------- State ---------- */
   const KEY = 'farmgear-zim-v2';
-  const blank = { name: '', role: 'Farmer', town: '', phone: '', photo: '', avatarPath: '' };
+  const blank = { name: '', role: 'Farmer', town: '', phone: '', province: '', district: '', photo: '', avatarPath: '' };
   let store = { profile: Object.assign({}, blank), saved: [] };
   try {
     const raw = localStorage.getItem(KEY);
@@ -117,32 +117,43 @@
     renderAll();
   }
 
+  const PHONE_RE = /^[+0-9 ()-]{9,20}$/;
+  let isAdmin = false;
   async function loadProfile() {
     if (!live || !user) return;
-    const res = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    const res = await sb.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
     if (res.error) { toast(res.error.message); return; }
     if (res.data) {
-      const d = res.data;
-      store.profile.name = d.name || '';
-      store.profile.role = d.role || 'Farmer';
-      store.profile.town = d.town || '';
-      store.profile.phone = d.phone || '';
-      store.profile.avatarPath = d.avatar_path || '';
-      if (d.avatar_path) store.profile.photo = publicUrl(d.avatar_path);
+      const d = res.data, p = store.profile;
+      p.name = d.full_name || '';
+      p.role = d.user_type || 'Farmer';
+      p.town = d.town || '';
+      p.phone = d.phone || '';
+      p.province = d.province || '';
+      p.district = d.district || '';
+      p.avatarPath = d.avatar_path || '';
+      if (d.avatar_path) p.photo = publicUrl(d.avatar_path);
+      isAdmin = d.role === 'admin' && d.status === 'active';
       persist();
     } else {
-      syncProfileNow();
+      await syncProfileNow();
     }
     renderProfile();
+    FG.fire('profile');
   }
 
   async function syncProfileNow() {
     if (!live || !user) return;
     const p = store.profile;
-    const res = await sb.from('profiles').upsert({
-      id: user.id, name: p.name, role: p.role, town: p.town, phone: p.phone,
-      avatar_path: p.avatarPath || null, updated_at: new Date().toISOString()
-    });
+    const row = {
+      full_name: p.name || null, user_type: p.role || 'Farmer', town: p.town || null,
+      province: p.province || null, district: p.district || null, avatar_path: p.avatarPath || null
+    };
+    if (!p.phone) row.phone = null; else if (PHONE_RE.test(p.phone)) row.phone = p.phone;
+    let res = await sb.from('user_profiles').update(row).eq('id', user.id).select('id');
+    if (!res.error && (!res.data || !res.data.length)) {
+      res = await sb.from('user_profiles').insert(Object.assign({ id: user.id }, row)).select('id');
+    }
     if (res.error) toast(res.error.message);
   }
   let syncTimer;
@@ -162,8 +173,8 @@
     return ini ? esc(ini) : icon('person');
   }
   function paintAvatars() {
-    $('#hdrAvatar').innerHTML = avatarHTML();
-    $('#bigAvatar').innerHTML = avatarHTML();
+    if ($('#hdrAvatar')) $('#hdrAvatar').innerHTML = avatarHTML();
+    if ($('#bigAvatar')) $('#bigAvatar').innerHTML = avatarHTML();
   }
 
   /* ---------- Photos ---------- */
@@ -290,6 +301,13 @@
     $('#pName').value = pr.name;
     $('#pRole').value = pr.role;
     $('#pTown').value = pr.town;
+    if ($('#pPhone')) $('#pPhone').value = pr.phone || '';
+    if ($('#pProvince')) {
+      $('#pProvince').value = pr.province || '';
+      $('#pDistrict').innerHTML = districtOptions(pr.province, pr.district, 'Choose your district');
+      $('#pDistrict').value = pr.district || '';
+    }
+    if ($('#adminLink')) $('#adminLink').hidden = !(live && user && isAdmin);
     $('#photoDel').hidden = !pr.photo;
     paintAvatars();
 
@@ -309,14 +327,14 @@
   const renderAll = () => { renderBrowse(); renderSaved(); renderProfile(); };
 
   /* ---------- Router ---------- */
-  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile'];
+  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile', 'market', 'prices', 'admin'];
   const chatId = () => (location.hash || '').slice(1).replace(/^chat-/, '');
   function route() {
     const raw = (location.hash || '#browse').slice(1);
     const h = raw.indexOf('chat-') === 0 ? 'chat' : raw;
     view = VIEWS.indexOf(h) > -1 ? h : 'browse';
     VIEWS.forEach((v) => { const el = $('#view-' + v); if (el) el.hidden = v !== view; });
-    const navKey = view === 'chat' ? 'messages' : view;
+    const navKey = view === 'chat' ? 'messages' : (view === 'admin' ? 'profile' : view);
     document.querySelectorAll('[data-nav]').forEach((a) => {
       if (a.getAttribute('data-nav') === navKey) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -331,6 +349,8 @@
     if (view === 'messages') loadConvs();
     if (view === 'chat') showChat(chatId());
     if (view === 'browse' && live && loadErr) loadListings();
+    FG.fire('route', view);
+    if (FG.routes[view]) { try { FG.routes[view](); } catch (e) { if (window.console) console.error(e); } }
     window.scrollTo(0, 0);
   }
 
@@ -346,6 +366,7 @@
   function closeSheet() {
     draft.forEach((d) => URL.revokeObjectURL(d.url));
     draft = [];
+    FG.fire('sheetclose');
     $('#overlay').hidden = true;
     document.body.style.overflow = '';
     if (lastFocus && lastFocus.focus) lastFocus.focus();
@@ -549,7 +570,7 @@
     return '<button type="button" class="btn alt" data-chat="' + esc(l.id) + '">' + icon('chat') + 'Message in app</button>';
   }
   function paintBadge() {
-    const n = convs.filter(unreadOf).length;
+    const n = convs.filter(unreadOf).length + (FG.extraUnread || 0);
     const b = $('#msgBadge');
     if (!b) return;
     b.textContent = n > 9 ? '9+' : String(n);
@@ -816,12 +837,20 @@
     $('#photoMsg').textContent = 'Photo removed.';
     renderProfile();
   });
-  function bindField(id, key) {
-    $(id).addEventListener('input', function () {
-      store.profile[key] = this.value; persist(); paintAvatars(); syncProfile();
+  function bindField(id, key, after) {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', function () {
+      store.profile[key] = this.value; if (after) after(); persist(); paintAvatars(); syncProfile();
     });
   }
   bindField('#pName', 'name'); bindField('#pRole', 'role'); bindField('#pTown', 'town');
+  bindField('#pPhone', 'phone');
+  bindField('#pProvince', 'province', () => {
+    store.profile.district = '';
+    $('#pDistrict').innerHTML = districtOptions(store.profile.province, '', 'Choose your district');
+  });
+  bindField('#pDistrict', 'district');
 
   window.addEventListener('hashchange', route);
 
@@ -831,6 +860,8 @@
     if (user) setTimeout(loadProfile, 0);
     setTimeout(loadListings, 0);
     setupChat();
+    if (!user) isAdmin = false;
+    FG.fire('user', user);
   }
   if (live) {
     sb.auth.getSession().then((r) => {
@@ -847,6 +878,89 @@
       afterAuth();
     });
   }
+
+  /* ---------- Shared API for the marketplace, prices and admin modules ---------- */
+  const PROVINCES = {
+    'Bulawayo': ['Bulawayo'],
+    'Harare': ['Harare', 'Chitungwiza', 'Epworth', 'Ruwa'],
+    'Manicaland': ['Buhera', 'Chimanimani', 'Chipinge', 'Makoni', 'Mutare', 'Mutasa', 'Nyanga'],
+    'Mashonaland Central': ['Bindura', 'Guruve', 'Mazowe', 'Mbire', 'Mount Darwin', 'Muzarabani', 'Rushinga', 'Shamva'],
+    'Mashonaland East': ['Chikomba', 'Goromonzi', 'Hwedza', 'Marondera', 'Mudzi', 'Murehwa', 'Mutoko', 'Seke', 'Uzumba-Maramba-Pfungwe'],
+    'Mashonaland West': ['Chegutu', 'Hurungwe', 'Kariba', 'Makonde', 'Mhondoro-Ngezi', 'Sanyati', 'Zvimba'],
+    'Masvingo': ['Bikita', 'Chiredzi', 'Chivi', 'Gutu', 'Masvingo', 'Mwenezi', 'Zaka'],
+    'Matabeleland North': ['Binga', 'Bubi', 'Hwange', 'Lupane', 'Nkayi', 'Tsholotsho', 'Umguza'],
+    'Matabeleland South': ['Beitbridge', 'Bulilima', 'Gwanda', 'Insiza', 'Mangwe', 'Matobo', 'Umzingwane'],
+    'Midlands': ['Chirumhanzu', 'Gokwe North', 'Gokwe South', 'Gweru', 'Kwekwe', 'Mberengwa', 'Shurugwi', 'Zvishavane']
+  };
+  function provinceOptions(sel, placeholder) {
+    return '<option value="">' + esc(placeholder || 'All provinces') + '</option>' +
+      Object.keys(PROVINCES).map((p) => '<option' + (p === sel ? ' selected' : '') + '>' + esc(p) + '</option>').join('');
+  }
+  function districtOptions(prov, sel, placeholder) {
+    return '<option value="">' + esc(placeholder || 'All districts') + '</option>' +
+      (PROVINCES[prov] || []).map((d) => '<option' + (d === sel ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+  }
+
+  function askConfirm(title, msg, okLabel) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'overlay confirm';
+      wrap.innerHTML = '<div class="sheet" role="alertdialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+        '<h2>' + esc(title) + '</h2><p class="desc">' + esc(msg) + '</p>' +
+        '<button type="button" class="btn alt" data-y>' + esc(okLabel || 'Yes') + '</button>' +
+        '<button type="button" class="btn ghost" data-n>Cancel</button></div>';
+      const done = (v) => { wrap.remove(); resolve(v); };
+      wrap.addEventListener('click', (e) => {
+        if (e.target.closest('[data-y]')) done(true);
+        else if (e.target.closest('[data-n]') || e.target === wrap) done(false);
+      });
+      document.body.appendChild(wrap);
+      const y = wrap.querySelector('[data-y]'); if (y) y.focus();
+    });
+  }
+
+  let catsPromise = null;
+  function loadCats(force) {
+    if (!live) return Promise.resolve([]);
+    if (!catsPromise || force) {
+      catsPromise = sb.from('product_categories').select('*').eq('active', true).order('sort_order')
+        .then((r) => { if (r.error) { catsPromise = null; throw r.error; } return r.data; });
+    }
+    return catsPromise;
+  }
+
+  const FG = window.FG = {
+    sb: sb, live: live, esc: esc, money: money, icon: icon, toast: toast, BUCKET: BUCKET,
+    openSheet: openSheet, closeSheet: closeSheet, openAuth: openAuth, toBlob: toBlob, publicUrl: publicUrl,
+    confirm: askConfirm, loadCats: loadCats, PROVINCES: PROVINCES,
+    provinceOptions: provinceOptions, districtOptions: districtOptions,
+    routes: {}, extraUnread: 0, paintBadge: paintBadge,
+    get user() { return user; },
+    get view() { return view; },
+    get profile() { return store.profile; },
+    get isAdmin() { return !!(live && user && isAdmin); },
+    _h: {},
+    on: function (name, fn) { (FG._h[name] = FG._h[name] || []).push(fn); },
+    fire: function (name, arg) {
+      (FG._h[name] || []).forEach((fn) => { try { fn(arg); } catch (e) { if (window.console) console.error(e); } });
+    },
+    requireAuth: function (msg) {
+      if (!live) { toast('Connect Supabase in config.js first.'); return false; }
+      if (!user) { openAuth(msg || 'Sign in to continue.'); return false; }
+      return true;
+    },
+    phoneOk: (v) => PHONE_RE.test(String(v || '').trim()),
+    /* Zimbabwe numbers: 0771234567 or +263771234567 -> 263771234567 for wa.me links */
+    waNumber: function (v) {
+      let d = String(v || '').replace(/[^\d]/g, '');
+      if (d.indexOf('00') === 0) d = d.slice(2);
+      if (d.charAt(0) === '0') d = '263' + d.slice(1);
+      return d;
+    },
+    waLink: function (phone, text) {
+      return 'https://wa.me/' + FG.waNumber(phone) + (text ? '?text=' + encodeURIComponent(text) : '');
+    }
+  };
 
   /* ---------- Init ---------- */
   const townOptions = TOWNS.map((t) => '<option>' + t + '</option>').join('');
