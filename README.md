@@ -22,6 +22,7 @@ Prices older than their product's limit are labelled Outdated; products with no 
 - `market.js`: produce marketplace, buy requests, enquiries
 - `prices.js`: market prices, comparison, history charts, alerts
 - `community.js`: farmer community (tips, questions, comments)
+- `weather.js`: farm weather and advice (data from Open-Meteo, no key needed)
 - `admin.js`: admin dashboard
 - `sw.js`, `manifest.json`, `icon-*.png`: PWA
 - `supabase.sql`, `messaging.sql`, `marketplace.sql`, `community.sql`: database

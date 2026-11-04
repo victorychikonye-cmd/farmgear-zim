@@ -360,7 +360,7 @@
   const renderAll = () => { renderBrowse(); renderSaved(); renderProfile(); };
 
   /* ---------- Router ---------- */
-  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile', 'market', 'prices', 'community', 'admin'];
+  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile', 'market', 'prices', 'community', 'weather', 'admin'];
   const chatId = () => (location.hash || '').slice(1).replace(/^chat-/, '');
   function route() {
     const raw = (location.hash || '#browse').slice(1);
