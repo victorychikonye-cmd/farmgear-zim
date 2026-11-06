@@ -22,7 +22,15 @@ Prices older than their product's limit are labelled Outdated; products with no 
 - `market.js`: produce marketplace, buy requests, enquiries
 - `prices.js`: market prices, comparison, history charts, alerts
 - `community.js`: farmer community (tips, questions, comments)
-- `weather.js`: farm weather and advice (data from Open-Meteo, no key needed)
 - `admin.js`: admin dashboard
 - `sw.js`, `manifest.json`, `icon-*.png`: PWA
 - `supabase.sql`, `messaging.sql`, `marketplace.sql`, `community.sql`: database
+
+
+## Android WebView wrapper notes
+
+This ZIP contains the website/PWA files only; it does not contain an Android Studio project or the Java/Kotlin WebView host, so it cannot by itself change the APK's native browser-toolbar behavior.
+
+For a native Android WebView app, the host Activity should load the FarmGear HTTPS URL directly with an Android `WebView`, keep same-domain navigation inside that WebView, and avoid launching Chrome Custom Tabs or an external browser for the app's own domain. Configure JavaScript and DOM storage only if the app requires them, and use a `WebChromeClient` for web features. External links (for example WhatsApp) can be routed to their intended apps.
+
+The PWA metadata has been strengthened for standalone installation. This affects supported PWA launches, not the native APK's toolbar. To fix the APK itself, the Android Studio project (or its `MainActivity`/WebView source) is required.

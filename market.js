@@ -495,7 +495,7 @@
       if (!files.length) err.textContent = 'No photo was picked. Tap Take or choose photos.';
       for (const f of files) {
         if (photos.length >= MAX_PHOTOS) { err.textContent = 'You can add up to ' + MAX_PHOTOS + ' photos.'; break; }
-        if (isImg(f)) photos.push({ file: FG.keep(f), url: URL.createObjectURL(f) });
+        if (isImg(f)) photos.push({ file: f, url: URL.createObjectURL(f) });
         else err.textContent = 'That file is not a photo. Pick a JPG or PNG picture.';
       }
       this.value = ''; renderStrip();

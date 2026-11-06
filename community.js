@@ -301,7 +301,7 @@
       const f = this.files && this.files[0]; this.value = '';
       if (!f) return;
       if (!(f.type.indexOf('image/') === 0 || !f.type || /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(f.name || ''))) { $('#cmErr').textContent = 'That file is not a photo. Pick a JPG or PNG.'; return; }
-      dropPhoto(); photo = { file: FG.keep(f), url: URL.createObjectURL(f) };
+      dropPhoto(); photo = { file: f, url: URL.createObjectURL(f) };
       $('#cmErr').textContent = '';
       $('#cmPrev').innerHTML = '<div class="pv"><img src="' + esc(photo.url) + '" alt="Your photo"><button type="button" data-cm="rmphoto" aria-label="Remove photo">' + icon('close') + '</button></div>';
     });
