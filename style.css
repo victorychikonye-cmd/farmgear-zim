@@ -523,3 +523,41 @@ input[type="number"], input[type="date"], input[type="url"] {
   .hdr-r { gap: 5px; }
 }
 @media (max-width: 350px) { .brand span:last-child { font-size: 19px; } }
+
+/* ---------- Farm weather ---------- */
+.wxnow { display: flex; align-items: center; gap: 14px; margin: 16px 0 10px; }
+.wxic { width: 44px; height: 44px; color: var(--brand); flex: none; stroke-width: 2.2; }
+.wxtemp { font: 800 48px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.wxkv { margin-bottom: 4px; }
+.wxcards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+.wxcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 4px; align-content: start; }
+.wxhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wxbig { font: 800 32px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.wxdays { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wxdays li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-variant-numeric: tabular-nums; }
+.wxdays .wxic { width: 32px; height: 32px; }
+.wxd { display: grid; min-width: 0; }
+.wxt { text-align: right; white-space: nowrap; }
+.wxr { display: grid; text-align: right; min-width: 64px; white-space: nowrap; }
+.legend { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 2px 0 10px; color: var(--muted); font-size: 12px; }
+.legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--chart); }
+@media (max-width: 420px) { .brand em { display: none; } }
+
+/* Bookings and trust */
+.trust { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 8px 0; min-height: 24px; }
+.vbadge { display: inline-flex; align-items: center; gap: 4px; }
+.vbadge .ic { width: 14px; height: 14px; }
+.stars { display: inline-flex; vertical-align: middle; }
+.star .ic { width: 14px; height: 14px; fill: none; stroke: var(--muted); stroke-width: 3; }
+.star.on .ic { fill: var(--sun); stroke: var(--sun); }
+.revlist { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.revlist li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.revlist p { margin: 4px 0 0; }
+.total { margin: 0; font-size: 16px; }
+.rate { display: flex; gap: 6px; }
+.ratebtn { width: 48px; height: 48px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); display: grid; place-items: center; cursor: pointer; }
+.ratebtn .ic { width: 26px; height: 26px; fill: none; stroke: var(--muted); stroke-width: 3; }
+.ratebtn.on .ic { fill: var(--sun); stroke: var(--sun); }
+.trustcard .btn { width: auto; }
+.bkrow .meta a { color: var(--clay); }
+#view-bookings .tabs button { font-size: 13px; }

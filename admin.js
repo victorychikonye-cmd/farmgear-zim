@@ -32,7 +32,7 @@
   }
 
   function shell() {
-    const tabs = [['overview', 'Overview'], ['prices', 'Prices'], ['listings', 'Listings'], ['requests', 'Requests'], ['reports', 'Reports'], ['users', 'Users']];
+    const tabs = [['overview', 'Overview'], ['prices', 'Prices'], ['listings', 'Listings'], ['requests', 'Requests'], ['reports', 'Reports'], ['verify', 'Verification'], ['users', 'Users']];
     view.innerHTML = '<h1>Admin</h1><p class="lead">Manage the market, official prices and users.</p>' +
       '<div class="tabs scroll" id="adTabs" role="group" aria-label="Admin sections">' +
       tabs.map((t) => '<button type="button" data-ad="tab" data-id="' + t[0] + '" aria-pressed="' + (S.tab === t[0]) + '">' + t[1] + '</button>').join('') + '</div>' +
@@ -57,7 +57,7 @@
       try { S.cats = await FG.loadCats(); S.cats.forEach((c) => { S.catMap[c.id] = c; }); }
       catch (e) { $('#adBody').innerHTML = '<p class="err">Could not load product types: ' + esc(e.message) + '</p>'; return; }
     }
-    const fn = { overview: tabOverview, prices: tabPrices, listings: tabListings, requests: tabRequests, reports: tabReports, users: tabUsers }[S.tab];
+    const fn = { overview: tabOverview, prices: tabPrices, listings: tabListings, requests: tabRequests, reports: tabReports, verify: tabVerify, users: tabUsers }[S.tab];
     await fn();
   }
   const body = () => $('#adBody');
@@ -293,6 +293,29 @@
       }).join('') + '</ul>' : '<div class="empty"><p><b>No reports here.</b></p><p class="meta">Reports from users appear here.</p></div>');
   }
 
+  /* ---------- verification requests ---------- */
+  async function tabVerify() {
+    loading();
+    const st = S.verSt || 'pending';
+    let q = sb.from('verification_requests').select('*').order('created_at', { ascending: false }).limit(60);
+    if (st !== 'all') q = q.eq('status', st);
+    const res = await q;
+    if (res.error) { failBox(res.error.message); return; }
+    S.ver = res.data;
+    body().innerHTML = '<div class="fpanel" style="margin-top:0">' + statusFilter(st, 'verst', [['pending', 'Waiting'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['revoked', 'Revoked'], ['all', 'All']]) + '</div>' +
+      '<p class="meta" style="margin:10px 0">Check the person before approving: call the phone number, ask the reference, and look at their listings. FarmGear does not collect ID documents.</p>' +
+      (res.data.length ? '<ul class="alist">' + res.data.map((r) =>
+        '<li class="arow"><h3>' + esc(r.full_name) + ' <span class="pill ' + (r.status === 'pending' ? 'warn' : r.status === 'approved' ? 'ok' : 'bad') + '">' + esc(r.status) + '</span></h3>' +
+        '<span class="meta">' + esc(r.phone) + (r.province ? ' · ' + esc(r.province) : '') + (r.town ? ' · ' + esc(r.town) : '') + ' · sent ' + esc(dLong(r.created_at)) + '</span>' +
+        '<span>' + esc(r.about) + '</span>' +
+        (r.reference_name || r.reference_phone ? '<span class="meta">Reference: ' + esc(r.reference_name || '') + ' ' + esc(r.reference_phone || '') + '</span>' : '') +
+        (r.admin_note ? '<span class="meta">Note: ' + esc(r.admin_note) + '</span>' : '') +
+        '<div class="mact">' +
+        (r.status === 'pending' ? '<button type="button" class="btn" data-ad="vapprove" data-id="' + esc(r.id) + '">Approve</button><button type="button" class="btn ghost" data-ad="vreject" data-id="' + esc(r.id) + '">Reject</button>' : '') +
+        (r.status === 'approved' ? '<button type="button" class="btn danger" data-ad="vrevoke" data-id="' + esc(r.id) + '">Remove badge</button>' : '') +
+        '</div></li>').join('') + '</ul>' : '<div class="empty"><p><b>Nothing here.</b></p><p class="meta">Verification requests appear here.</p></div>');
+  }
+
   /* ---------- users ---------- */
   async function tabUsers() {
     loading();
@@ -307,7 +330,7 @@
       (res.data.length ? '<ul class="alist">' + res.data.map((u) => {
         const me = FG.user && u.id === FG.user.id;
         return '<li class="arow"><h3>' + esc(u.full_name || 'No name yet') + (me ? ' (you)' : '') + ' ' +
-          (u.role === 'admin' ? '<span class="pill sun">Admin</span> ' : '') + (u.status === 'suspended' ? '<span class="pill bad">Suspended</span>' : '') + '</h3>' +
+          (u.role === 'admin' ? '<span class="pill sun">Admin</span> ' : '') + (u.verified ? '<span class="pill ok">Verified</span> ' : '') + (u.status === 'suspended' ? '<span class="pill bad">Suspended</span>' : '') + '</h3>' +
           '<span class="meta">' + esc(u.email || '') + ' · ' + esc(u.user_type) + (u.phone ? ' · ' + esc(u.phone) : '') + ' · joined ' + esc(dLong(u.created_at)) + '</span>' +
           (me ? '' : '<div class="mact">' +
             '<button type="button" class="btn ' + (u.status === 'suspended' ? 'ghost' : 'danger') + '" data-ad="usus" data-id="' + esc(u.id) + '">' + (u.status === 'suspended' ? 'Reactivate' : 'Suspend') + '</button>' +
@@ -346,6 +369,7 @@
     else if (a === 'lst') { S.lst = t.value; show(); }
     else if (a === 'rst') { S.rst = t.value; show(); }
     else if (a === 'repst') { S.repSt = t.value; show(); }
+    else if (a === 'verst') { S.verSt = t.value; show(); }
   });
   document.addEventListener('click', async (e) => {
     const t = e.target.closest('[data-ad]');
@@ -404,6 +428,13 @@
         } else {
           run(sb.from('listing_reports').update({ status: a === 'repdismiss' ? 'dismissed' : 'reviewed' }).eq('id', id), 'Report updated.');
         }
+        break;
+      }
+      case 'vapprove': case 'vreject': case 'vrevoke': {
+        const to = a === 'vapprove' ? 'approved' : a === 'vreject' ? 'rejected' : 'revoked';
+        const ok = to === 'approved' ? 'Approve' : to === 'rejected' ? 'Reject' : 'Remove badge';
+        if (!(await FG.confirm(ok + '?', to === 'approved' ? 'The person gets a Verified badge on their listings.' : to === 'rejected' ? 'They can send a new request later.' : 'The Verified badge is removed.', ok))) break;
+        run(sb.from('verification_requests').update({ status: to }).eq('id', id), to === 'approved' ? 'Verified.' : 'Updated.');
         break;
       }
       case 'usus': {

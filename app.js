@@ -178,30 +178,63 @@
   }
 
   /* ---------- Photos ---------- */
-  function toBlob(file, max, square, quality) {
-    return new Promise((resolve, reject) => {
+  /* Start reading a picked photo straight away. On some Android WebViews the file can no longer be read
+     after the file input is cleared, so the bytes are grabbed first and used later. */
+  function keep(file) {
+    try { if (file && file.arrayBuffer && !file.__data) { file.__data = file.arrayBuffer(); file.__data.catch(function () {}); } } catch (e) { /* ignore */ }
+    return file;
+  }
+  const loadImg = (url) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('decode'));
+    img.src = url;
+  });
+  async function decodePhoto(file) {
+    let blob = file;
+    if (file && file.__data) {
+      try { blob = new Blob([await file.__data], { type: file.type || 'image/jpeg' }); } catch (e) { blob = file; }
+    }
+    if (window.createImageBitmap) {
+      try { const bm = await createImageBitmap(blob); return { img: bm, w: bm.width, h: bm.height }; } catch (e) { /* try next way */ }
+    }
+    try {
+      const url = URL.createObjectURL(blob);
+      try { const img = await loadImg(url); return { img: img, w: img.naturalWidth, h: img.naturalHeight }; }
+      finally { URL.revokeObjectURL(url); }
+    } catch (e) { /* try next way */ }
+    const dataUrl = await new Promise((resolve, reject) => {
       const fr = new FileReader();
-      fr.onerror = () => reject(new Error('Could not read the photo.'));
-      fr.onload = () => {
-        const img = new Image();
-        img.onerror = () => reject(new Error('That file is not a photo. Pick a JPG or PNG.'));
-        img.onload = () => {
-          let sx = 0, sy = 0, sw = img.width, sh = img.height, w, h;
-          if (square) {
-            const s = Math.min(sw, sh);
-            sx = (sw - s) / 2; sy = (sh - s) / 2; sw = sh = s; w = h = max;
-          } else {
-            const k = Math.min(1, max / Math.max(sw, sh));
-            w = Math.round(sw * k); h = Math.round(sh * k);
-          }
-          const c = document.createElement('canvas');
-          c.width = w; c.height = h;
-          c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-          c.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not process the photo.'))), 'image/jpeg', quality || 0.82);
-        };
-        img.src = fr.result;
-      };
-      fr.readAsDataURL(file);
+      fr.onerror = () => reject(new Error('read'));
+      fr.onload = () => resolve(fr.result);
+      fr.readAsDataURL(blob);
+    });
+    const img = await loadImg(dataUrl);
+    return { img: img, w: img.naturalWidth, h: img.naturalHeight };
+  }
+  async function toBlob(file, max, square, quality) {
+    let d;
+    try { d = await decodePhoto(file); }
+    catch (e) {
+      const name = (file && file.name) || '';
+      throw new Error(/\.(heic|heif)$/i.test(name)
+        ? 'This photo format (HEIC) is not supported. Take the photo again or choose a JPG or PNG.'
+        : 'Could not read the photo. Choose it again, or take a new photo.');
+    }
+    let sx = 0, sy = 0, sw = d.w, sh = d.h, w, h;
+    if (square) {
+      const s = Math.min(sw, sh);
+      sx = (sw - s) / 2; sy = (sh - s) / 2; sw = sh = s; w = h = max;
+    } else {
+      const k = Math.min(1, max / Math.max(sw, sh));
+      w = Math.round(sw * k); h = Math.round(sh * k);
+    }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(d.img, sx, sy, sw, sh, 0, 0, w, h);
+    if (d.img.close) { try { d.img.close(); } catch (e) { /* ignore */ } }
+    return new Promise((resolve, reject) => {
+      c.toBlob((bl) => (bl ? resolve(bl) : reject(new Error('Could not process the photo. Try a smaller one.'))), 'image/jpeg', quality || 0.82);
     });
   }
   const blobToDataURL = (b) => new Promise((resolve) => { const f = new FileReader(); f.onload = () => resolve(f.result); f.readAsDataURL(b); });
@@ -327,14 +360,14 @@
   const renderAll = () => { renderBrowse(); renderSaved(); renderProfile(); };
 
   /* ---------- Router ---------- */
-  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile', 'market', 'prices', 'community', 'admin'];
+  const VIEWS = ['browse', 'saved', 'messages', 'chat', 'profile', 'market', 'prices', 'community', 'weather', 'bookings', 'admin'];
   const chatId = () => (location.hash || '').slice(1).replace(/^chat-/, '');
   function route() {
     const raw = (location.hash || '#browse').slice(1);
     const h = raw.indexOf('chat-') === 0 ? 'chat' : raw;
     view = VIEWS.indexOf(h) > -1 ? h : 'browse';
     VIEWS.forEach((v) => { const el = $('#view-' + v); if (el) el.hidden = v !== view; });
-    const navKey = view === 'chat' ? 'messages' : (view === 'admin' ? 'profile' : view);
+    const navKey = view === 'chat' ? 'messages' : (view === 'admin' || view === 'bookings' ? 'profile' : view);
     document.querySelectorAll('[data-nav]').forEach((a) => {
       if (a.getAttribute('data-nav') === navKey) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -365,6 +398,7 @@
     $('#overlay').hidden = false;
     document.body.style.overflow = 'hidden';
     $('#sheetX').focus();
+    FG.fire('sheetopen');
   }
   function closeSheet() {
     draft.forEach((d) => URL.revokeObjectURL(d.url));
@@ -406,9 +440,11 @@
       gallery +
       '<h2>' + esc(l.title) + '</h2>' +
       '<p class="meta">' + esc(catName(l.cat)) + ' · ' + esc(l.town) + ' · ' + esc(l.cond) + '</p>' +
+      (live && l.owner ? '<div class="trust" data-trust="' + esc(l.owner) + '"></div>' : '') +
       '<div class="price-row">' + prices + '</div>' +
       (l.description ? '<p class="desc">' + esc(l.description) + '</p>' : '') +
       '<dl>' + specHtml + '</dl>' +
+      bookBtnHtml(l) +
       chatBtnHtml(l) +
       foot
     );
@@ -495,7 +531,7 @@
       if (!files.length) { $('#aErr').textContent = 'No photo was picked. Tap Take or choose photos and select a picture.'; }
       for (const f of files) {
         if (draft.length >= MAX_PHOTOS) { $('#aErr').textContent = 'You can add up to ' + MAX_PHOTOS + ' photos.'; break; }
-        if (isImage(f)) draft.push({ file: f, url: URL.createObjectURL(f) });
+        if (isImage(f)) draft.push({ file: keep(f), url: URL.createObjectURL(f) });
         else $('#aErr').textContent = 'That file is not a photo. Pick a JPG or PNG picture.';
       }
       this.value = '';
@@ -567,6 +603,10 @@
     const d = new Date(iso);
     if (d.toDateString() === new Date().toDateString()) return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+  function bookBtnHtml(l) {
+    if (!live || isMine(l) || !l.hire) return '';
+    return '<button type="button" class="btn" data-bk="book" data-id="' + esc(l.id) + '">' + icon('calendar') + 'Book for dates</button>';
   }
   function chatBtnHtml(l) {
     if (!live || isMine(l)) return '';
@@ -832,7 +872,7 @@
   $('#overlay').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#overlay').hidden) closeSheet(); });
 
-  $('#photoIn').addEventListener('change', function () { setAvatar(this.files && this.files[0]); this.value = ''; });
+  $('#photoIn').addEventListener('change', function () { setAvatar(keep(this.files && this.files[0])); this.value = ''; });
   $('#photoDel').addEventListener('click', async () => {
     if (live && user && store.profile.avatarPath) sb.storage.from(BUCKET).remove([store.profile.avatarPath]);
     store.profile.photo = ''; store.profile.avatarPath = '';
@@ -934,10 +974,10 @@
 
   const FG = window.FG = {
     sb: sb, live: live, esc: esc, money: money, icon: icon, toast: toast, BUCKET: BUCKET,
-    openSheet: openSheet, closeSheet: closeSheet, openAuth: openAuth, toBlob: toBlob, publicUrl: publicUrl,
+    openSheet: openSheet, closeSheet: closeSheet, openAuth: openAuth, toBlob: toBlob, keep: keep, publicUrl: publicUrl,
     confirm: askConfirm, loadCats: loadCats, PROVINCES: PROVINCES,
     provinceOptions: provinceOptions, districtOptions: districtOptions,
-    routes: {}, extraUnread: 0, paintBadge: paintBadge,
+    routes: {}, extraUnread: 0, paintBadge: paintBadge, listing: (id) => byId(id),
     get user() { return user; },
     get view() { return view; },
     get profile() { return store.profile; },

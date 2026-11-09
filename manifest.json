@@ -11,36 +11,11 @@
   "orientation": "any",
   "background_color": "#0F3320",
   "theme_color": "#0F3320",
-  "categories": [
-    "business",
-    "shopping"
-  ],
+  "categories": ["business", "shopping"],
   "prefer_related_applications": false,
   "icons": [
-    {
-      "src": "/farmgear-zim/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/farmgear-zim/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/farmgear-zim/icon-maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
-  "display_override": [
-    "standalone",
-    "minimal-ui"
-  ],
-  "launch_handler": {
-    "client_mode": "navigate-existing"
-  }
+    { "src": "/farmgear-zim/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/farmgear-zim/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/farmgear-zim/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }

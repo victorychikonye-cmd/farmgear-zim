@@ -375,6 +375,7 @@
       '<div class="price-row"><div class="price hire"><span>Asking price ' + esc(PER[p.unit]) + '</span><b>$' + fmt(p.price) + '</b></div>' +
       '<div class="price buy"><span>Available</span><b>' + esc(qtyText(p.quantity, p.unit)) + '</b></div></div>' +
       (p.description ? '<p class="desc">' + esc(p.description) + '</p>' : '') +
+      (FG.live && p.owner ? '<div class="trust" data-trust="' + esc(p.owner) + '"></div>' : '') +
       '<dl><dt>Seller</dt><dd>' + esc(p.seller_name || 'Farmer') + '</dd><dt>Posted</dt><dd>' + esc(day(p.created_at)) + '</dd></dl>' + acts
     );
   }
@@ -495,7 +496,7 @@
       if (!files.length) err.textContent = 'No photo was picked. Tap Take or choose photos.';
       for (const f of files) {
         if (photos.length >= MAX_PHOTOS) { err.textContent = 'You can add up to ' + MAX_PHOTOS + ' photos.'; break; }
-        if (isImg(f)) photos.push({ file: f, url: URL.createObjectURL(f) });
+        if (isImg(f)) photos.push({ file: FG.keep(f), url: URL.createObjectURL(f) });
         else err.textContent = 'That file is not a photo. Pick a JPG or PNG picture.';
       }
       this.value = ''; renderStrip();
